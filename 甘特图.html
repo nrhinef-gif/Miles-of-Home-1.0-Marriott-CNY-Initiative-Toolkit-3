@@ -1,0 +1,1498 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Interactive Gantt</title>
+  <style>
+    :root{
+      --bg:#fbfaf7;
+      --card:rgba(255,255,255,.72);
+      --ink:#1f1a16;
+      --muted:rgba(31,26,22,.60);
+      --grid:rgba(31,26,22,.10);
+      --grid2:rgba(31,26,22,.06);
+      --accent:#7a4e2d;
+      --accent2:#c28a5a;
+      --ok:#2f6b4f;
+      --warn:#a86b1d;
+      --bad:#8a2c2c;
+      --shadow:0 18px 50px rgba(20,16,12,.10);
+      --radius:22px;
+
+      --colW: 34px;
+      --rowH: 44px;
+      --labelW: 280px;
+      --headerH: 56px;
+      --lanePad: 10px;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      background:
+        radial-gradient(1200px 800px at 12% 10%, rgba(194,138,90,.12), transparent 60%),
+        radial-gradient(1000px 700px at 85% 15%, rgba(122,78,45,.10), transparent 55%),
+        radial-gradient(900px 700px at 50% 95%, rgba(31,26,22,.08), transparent 55%),
+        var(--bg);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--ink);
+      padding:22px;
+    }
+
+    .wrap{
+      width:min(1560px, 97vw);
+      display:grid;
+      grid-template-columns: 1.05fr 1.7fr;
+      gap:16px;
+      align-items:stretch;
+    }
+    @media (max-width: 1100px){
+      .wrap{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      border-radius:var(--radius);
+      background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.62));
+      box-shadow:var(--shadow);
+      border:1px solid rgba(31,26,22,.08);
+      overflow:hidden;
+      position:relative;
+    }
+    .card::before{
+      content:"";
+      position:absolute; inset:-1px;
+      background:
+        radial-gradient(620px 320px at 20% 10%, rgba(194,138,90,.18), transparent 55%),
+        radial-gradient(760px 380px at 90% 0%, rgba(122,78,45,.14), transparent 60%);
+      pointer-events:none;
+      opacity:.62;
+    }
+
+    /* Left panel */
+    .left{
+      padding:18px 18px 14px;
+      z-index:1;
+      position:relative;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .kicker{
+      font-size:12px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(31,26,22,.55);
+    }
+    h1{
+      margin:0;
+      font-size:22px;
+      line-height:1.15;
+      letter-spacing:-0.02em;
+    }
+    .sub{
+      margin:0;
+      font-size:13px;
+      line-height:1.55;
+      color:var(--muted);
+      max-width:80ch;
+    }
+
+    .controls{
+      border-radius:16px;
+      border:1px solid rgba(31,26,22,.10);
+      background:rgba(255,255,255,.55);
+      padding:12px;
+      display:grid;
+      gap:10px;
+    }
+    .controls .row{
+      display:grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap:10px;
+      align-items:center;
+    }
+    .controls label{
+      font-size:12px;
+      font-weight:850;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:rgba(31,26,22,.58);
+    }
+    .controls .pair{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    select, input[type="date"], input[type="checkbox"], input[type="number"], input[type="text"]{
+      font:inherit;
+    }
+    select, input[type="date"], input[type="number"]{
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid rgba(31,26,22,.14);
+      background:rgba(255,255,255,.70);
+      color:var(--ink);
+      outline:none;
+      font-weight:750;
+      font-size:12px;
+    }
+    select:focus, input:focus{
+      border-color: rgba(122,78,45,.55);
+      box-shadow: 0 0 0 4px rgba(194,138,90,.18);
+    }
+    .toggle{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+      font-size:12px;
+      color:rgba(31,26,22,.62);
+      font-weight:800;
+    }
+    .toggle input{
+      width:16px; height:16px;
+      accent-color: var(--accent);
+    }
+    .btnRow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      justify-content:flex-end;
+    }
+    button{
+      cursor:pointer;
+      border-radius:999px;
+      border:1px solid rgba(31,26,22,.12);
+      background:rgba(255,255,255,.60);
+      padding:10px 12px;
+      font-size:12px;
+      font-weight:850;
+      color:rgba(31,26,22,.78);
+      transition:transform .05s ease, box-shadow .2s ease, border-color .2s ease;
+      white-space:nowrap;
+    }
+    button:hover{
+      border-color: rgba(122,78,45,.35);
+      box-shadow: 0 10px 24px rgba(20,16,12,.10);
+      transform: translateY(-1px);
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:850;
+      border:1px solid rgba(31,26,22,.10);
+      background: rgba(255,255,255,.55);
+      color: rgba(31,26,22,.70);
+      white-space:nowrap;
+    }
+    .pill.good{ color:var(--ok); border-color:rgba(47,107,79,.22); background:rgba(47,107,79,.08); }
+    .pill.mid{ color:var(--warn); border-color:rgba(168,107,29,.22); background:rgba(168,107,29,.08); }
+    .pill.low{ color:var(--bad); border-color:rgba(138,44,44,.22); background:rgba(138,44,44,.08); }
+
+    .help{
+      border-radius:16px;
+      border:1px solid rgba(31,26,22,.10);
+      background:rgba(255,255,255,.50);
+      padding:12px;
+      font-size:12px;
+      line-height:1.55;
+      color:rgba(31,26,22,.62);
+    }
+    .help b{ color:rgba(31,26,22,.82); }
+    code{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:11px;
+      background: rgba(31,26,22,.06);
+      padding:2px 6px;
+      border-radius:8px;
+      border:1px solid rgba(31,26,22,.08);
+    }
+
+    /* Right panel - Gantt */
+    .right{
+      padding:14px;
+      z-index:1;
+      position:relative;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height: 720px;
+    }
+
+    .topline{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      padding:4px 6px 0;
+    }
+    .topline b{
+      font-size:12px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:rgba(31,26,22,.55);
+    }
+    .topline span{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:750;
+    }
+
+    .ganttShell{
+      border-radius:16px;
+      border:1px solid rgba(31,26,22,.10);
+      background: rgba(255,255,255,.55);
+      overflow:auto;
+      position:relative;
+    }
+
+    .gantt{
+      position:relative;
+      min-width: calc(var(--labelW) + 16 * var(--colW));
+    }
+
+    .header{
+      position:sticky;
+      top:0;
+      z-index:6;
+      height:var(--headerH);
+      background: rgba(255,255,255,.82);
+      backdrop-filter: blur(8px);
+      border-bottom:1px solid rgba(31,26,22,.10);
+      display:grid;
+      grid-template-columns: var(--labelW) 1fr;
+    }
+
+    .header .leftHead{
+      padding:14px 12px;
+      border-right:1px solid rgba(31,26,22,.08);
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+    }
+    .header .leftHead .t1{
+      font-size:12px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(31,26,22,.55);
+      font-weight:900;
+    }
+    .header .leftHead .t2{
+      font-size:12px;
+      color:rgba(31,26,22,.60);
+      font-weight:750;
+    }
+
+    .timeGrid{
+      position:relative;
+      display:grid;
+      grid-auto-flow: column;
+      grid-auto-columns: var(--colW);
+      align-items:stretch;
+    }
+
+    .wkCell{
+      border-left:1px solid rgba(31,26,22,.06);
+      padding:10px 6px 8px;
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      align-items:center;
+      justify-content:center;
+      color:rgba(31,26,22,.58);
+      font-size:11px;
+      font-weight:900;
+      user-select:none;
+    }
+    .wkCell .m{
+      font-size:10px;
+      color:rgba(31,26,22,.48);
+      font-weight:850;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .body{
+      display:grid;
+      grid-template-columns: var(--labelW) 1fr;
+    }
+
+    .labels{
+      border-right:1px solid rgba(31,26,22,.08);
+      background: rgba(255,255,255,.55);
+      position:sticky;
+      left:0;
+      z-index:5;
+    }
+
+    .laneLabel{
+      height:var(--rowH);
+      padding:10px 12px;
+      border-bottom:1px solid rgba(31,26,22,.06);
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:3px;
+    }
+    .laneLabel b{
+      font-size:12px;
+      font-weight:950;
+      color:rgba(31,26,22,.78);
+      line-height:1.1;
+    }
+    .laneLabel span{
+      font-size:11px;
+      color:rgba(31,26,22,.52);
+      font-weight:750;
+    }
+    .laneLabel .subrow{
+      font-size:11px;
+      color:rgba(31,26,22,.50);
+      font-weight:850;
+    }
+
+    .grid{
+      position:relative;
+    }
+
+    .gridRow{
+      height:var(--rowH);
+      border-bottom:1px solid rgba(31,26,22,.06);
+      display:grid;
+      grid-auto-flow: column;
+      grid-auto-columns: var(--colW);
+    }
+    .gridRow > div{
+      border-left:1px solid rgba(31,26,22,.04);
+    }
+
+    .bar{
+      position:absolute;
+      height: calc(var(--rowH) - 18px);
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(194,138,90,.74), rgba(122,78,45,.74));
+      border:1px solid rgba(122,78,45,.35);
+      box-shadow: 0 10px 22px rgba(20,16,12,.10);
+      display:flex;
+      align-items:center;
+      padding:0 10px;
+      gap:8px;
+      color: rgba(255,255,255,.92);
+      font-size:12px;
+      font-weight:950;
+      letter-spacing:-0.01em;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+      user-select:none;
+    }
+    .bar .tag{
+      background: rgba(255,255,255,.18);
+      border:1px solid rgba(255,255,255,.25);
+      padding:3px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:950;
+    }
+
+    .bar.light{
+      background: linear-gradient(90deg, rgba(31,26,22,.12), rgba(31,26,22,.08));
+      border-color: rgba(31,26,22,.14);
+      color: rgba(31,26,22,.76);
+      box-shadow: none;
+    }
+    .bar.warn{
+      background: linear-gradient(90deg, rgba(168,107,29,.74), rgba(168,107,29,.45));
+      border-color: rgba(168,107,29,.35);
+    }
+    .bar.bad{
+      background: linear-gradient(90deg, rgba(138,44,44,.74), rgba(138,44,44,.45));
+      border-color: rgba(138,44,44,.35);
+    }
+
+    .milestone{
+      position:absolute;
+      width: 14px;
+      height: 14px;
+      transform: rotate(45deg);
+      border-radius: 4px;
+      background: rgba(255,255,255,.85);
+      border:2px solid rgba(122,78,45,.85);
+      box-shadow: 0 10px 18px rgba(20,16,12,.10);
+      z-index:4;
+    }
+    .milestone::after{
+      content: attr(data-label);
+      position:absolute;
+      transform: rotate(-45deg);
+      left: 16px;
+      top: -4px;
+      font-size: 11px;
+      font-weight: 950;
+      color: rgba(31,26,22,.78);
+      white-space: nowrap;
+      user-select:none;
+    }
+
+    .todayLine{
+      position:absolute;
+      top:0;
+      bottom:0;
+      width:2px;
+      background: rgba(31,26,22,.18);
+      box-shadow: 0 0 0 6px rgba(194,138,90,.12);
+      z-index:3;
+    }
+
+    .legend{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 6px 2px;
+    }
+
+    .key{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      font-size:12px;
+      color:rgba(31,26,22,.62);
+      font-weight:850;
+    }
+    .sw{
+      width:16px; height:12px;
+      border-radius:999px;
+      background: linear-gradient(90deg, rgba(194,138,90,.74), rgba(122,78,45,.74));
+      border:1px solid rgba(122,78,45,.35);
+    }
+    .sw2{
+      width:14px; height:14px;
+      transform: rotate(45deg);
+      border-radius:4px;
+      background: rgba(255,255,255,.85);
+      border:2px solid rgba(122,78,45,.85);
+    }
+
+    /* Editor table */
+    .editor{
+      margin-top:8px;
+      border-radius:16px;
+      border:1px solid rgba(31,26,22,.10);
+      background:rgba(255,255,255,.50);
+      overflow:auto;
+      max-height: 330px;
+    }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width: 1060px;
+    }
+    th, td{
+      padding:10px 10px;
+      font-size:12px;
+      border-bottom:1px solid rgba(31,26,22,.08);
+      vertical-align:middle;
+      background: transparent;
+    }
+    th{
+      position:sticky;
+      top:0;
+      z-index:2;
+      background: rgba(255,255,255,.82);
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:rgba(31,26,22,.55);
+      font-weight:950;
+    }
+    td input[type="text"], td input[type="date"], td select{
+      width:100%;
+      min-width: 120px;
+    }
+    td .tiny{
+      font-size:11px;
+      color:rgba(31,26,22,.55);
+      font-weight:800;
+    }
+    .dangerBtn{
+      border-color: rgba(138,44,44,.22);
+      color: rgba(138,44,44,.80);
+      background: rgba(138,44,44,.06);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- LEFT -->
+    <section class="card left">
+      <div class="kicker">Toolkit — Project Timeline</div>
+      <h1>Interactive Gantt</h1>
+      <p class="sub">
+        Designed for <b>execution control</b> (SOP-driven) and <b>CEO reporting</b>.
+        Fixes “overcrowding” via: <b>(A)</b> Program hides per-hotel blocks by default, <b>(B)</b> Detail filters,
+        <b>(C)</b> Auto stacking for overlapping bars. Supports <b>Weekly</b> and <b>Daily</b> (day-precision) modes.
+      </p>
+
+      <div class="controls">
+        <div class="row">
+          <label>View Mode</label>
+          <div class="pair">
+            <select id="viewMode">
+              <option value="program">Program (by Workstream)</option>
+              <option value="hotel">Hotel Parallel (by Hotel)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- A: Program detail switch -->
+        <div class="row">
+          <label>Program Detail</label>
+          <div class="pair">
+            <div class="toggle">
+              <input type="checkbox" id="showHotelItemsInProgram"/>
+              <span>Show per-hotel items in Program view</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- B: Detail level -->
+        <div class="row">
+          <label>Detail Level</label>
+          <div class="pair">
+            <select id="detailLevel">
+              <option value="overview">Overview (Gates + W blocks)</option>
+              <option value="standard" selected>Standard (+ Key Dates)</option>
+              <option value="detailed">Detailed (all tasks)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Day vs Week -->
+        <div class="row">
+          <label>Granularity</label>
+          <div class="pair">
+            <select id="granularity">
+              <option value="week" selected>Weekly</option>
+              <option value="day">Daily (day-precision)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Hotel Filter</label>
+          <div class="pair">
+            <select id="hotelFilter"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Broadcast “ALL”</label>
+          <div class="pair">
+            <div class="toggle">
+              <input type="checkbox" id="broadcastAll" checked />
+              <span>Show ALL tasks on each hotel lane</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Column Width</label>
+          <div class="pair">
+            <input type="number" id="colWidth" min="12" max="80" value="34" />
+            <span class="pill" id="colUnit">weeks</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Date Range</label>
+          <div class="pair">
+            <input type="date" id="rangeStart"/>
+            <input type="date" id="rangeEnd"/>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Milestones</label>
+          <div class="pair">
+            <div class="toggle">
+              <input type="checkbox" id="showMilestones" checked/>
+              <span>Show Gates & key dates</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="btnRow">
+          <button id="btnAutoRange" type="button">Auto Fit Range</button>
+          <button id="btnAddTask" type="button">Add Task</button>
+          <button id="btnExportCSV" type="button">Export CSV</button>
+          <button id="btnExportJSON" type="button">Export JSON</button>
+          <button id="btnReset" type="button" class="dangerBtn">Reset Sample</button>
+        </div>
+      </div>
+
+      <div class="help">
+        <b>How to read:</b><br/>
+        • <b>Program</b> view = leadership “control points” (G0–G8) + week blocks; <b>Hotel</b> view = execution lanes.<br/>
+        • Use <b>Detail Level</b> to reduce noise (Overview/Standard/Detailed).<br/>
+        • Use <b>Daily</b> mode for precise ticketing / booking windows and holiday execution tracking.<br/>
+        • Overlapping tasks are auto-placed into additional sub-rows (stacking) so nothing is hidden.
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <section class="card right">
+      <div class="topline">
+        <div>
+          <b id="titleRight">Gantt View</b><br/>
+          <span id="subtitleRight">—</span>
+        </div>
+        <div class="pill" id="metaPill">—</div>
+      </div>
+
+      <div class="legend">
+        <div class="key"><span class="sw"></span> Task</div>
+        <div class="key"><span class="sw2"></span> Milestone (Gate / key date)</div>
+      </div>
+
+      <div class="ganttShell" id="ganttShell">
+        <div class="gantt" id="gantt"></div>
+      </div>
+
+      <div class="editor">
+        <table id="taskTable" aria-label="Task editor table">
+          <thead>
+            <tr>
+              <th style="min-width:260px;">Task</th>
+              <th style="min-width:150px;">Lane (Workstream)</th>
+              <th style="min-width:130px;">Type</th>
+              <th style="min-width:140px;">Start</th>
+              <th style="min-width:140px;">End</th>
+              <th style="min-width:180px;">Applies To (Hotels)</th>
+              <th style="min-width:120px;">Gate/Tag</th>
+              <th style="min-width:120px;">Priority</th>
+              <th style="min-width:120px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody><!-- injected --></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+<script>
+/* =========================
+   Utilities
+========================= */
+const pad2 = n => String(n).padStart(2,"0");
+function toDateStr(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function parseDate(s){
+  const [y,m,d]=String(s).split("-").map(Number);
+  const x = new Date(y, (m-1), d);
+  x.setHours(0,0,0,0);
+  return x;
+}
+function addDays(d, days){
+  const x = new Date(d.getTime());
+  x.setDate(x.getDate()+days);
+  x.setHours(0,0,0,0);
+  return x;
+}
+function diffDays(a,b){
+  const ms = (b.getTime()-a.getTime());
+  return Math.round(ms/(24*3600*1000));
+}
+function clamp(n, lo, hi){ return Math.max(lo, Math.min(hi, n)); }
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, m => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[m])); }
+
+function startOfWeekMon(d){
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (x.getDay()+6)%7; // Mon=0..Sun=6
+  x.setDate(x.getDate() - day);
+  x.setHours(0,0,0,0);
+  return x;
+}
+function endOfWeekSun(d){
+  const s = startOfWeekMon(d);
+  return addDays(s, 6);
+}
+
+function tid(){
+  return "T" + Math.random().toString(16).slice(2) + Date.now().toString(16).slice(-4);
+}
+
+/* =========================
+   Data
+========================= */
+let hotels = [
+  { code:"H01", name:"Pilot Hotel 01 (City/Brand TBD)" },
+  { code:"H02", name:"Pilot Hotel 02 (City/Brand TBD)" },
+  { code:"H03", name:"Pilot Hotel 03 (City/Brand TBD)" },
+  { code:"H04", name:"Pilot Hotel 04 (City/Brand TBD)" },
+  { code:"H05", name:"Pilot Hotel 05 (City/Brand TBD)" },
+  { code:"H06", name:"Pilot Hotel 06 (City/Brand TBD)" },
+  { code:"H07", name:"Pilot Hotel 07 (City/Brand TBD)" },
+  { code:"H08", name:"Pilot Hotel 08 (City/Brand TBD)" },
+  { code:"H09", name:"Pilot Hotel 09 (City/Brand TBD)" },
+  { code:"H10", name:"Pilot Hotel 10 (City/Brand TBD)" }
+];
+
+const WORKSTREAMS = [
+  { key:"PMO",      label:"Group PMO / Governance",      hint:"policy · approvals · toolkit" },
+  { key:"Owner",    label:"Owner / GM Alignment",        hint:"buy-in · budget · sign-off" },
+  { key:"HotelOps", label:"Hotel Execution (HR/Ops)",    hint:"selection · comms · rehearsal" },
+  { key:"Finance",  label:"Finance / Settlement",        hint:"budget lock · CL · audit" },
+  { key:"BrandPR",  label:"Brand / PR / Content",        hint:"formats · library · externalization" },
+  { key:"Agency",   label:"Agency Support (optional)",   hint:"design · edits · packaging" }
+];
+
+// Today line anchored to your stated date
+const TODAY_STR = "2025-12-14";
+
+// Sample tasks (you can edit / delete / add)
+let tasks = [
+  // W-6
+  { id:tid(), name:"Approval pack & governance draft (CEO-ready)", lane:"PMO", type:"task", start:"2025-12-15", end:"2025-12-21", appliesTo:"ALL", tag:"W-6", priority:"High" },
+  { id:tid(), name:"Budget model v0.9 + internal settlement feasibility check", lane:"Finance", type:"task", start:"2025-12-15", end:"2025-12-21", appliesTo:"ALL", tag:"W-6", priority:"High" },
+  { id:tid(), name:"Hotel selection rubric v0.9 + toolkit outline", lane:"PMO", type:"task", start:"2025-12-15", end:"2025-12-21", appliesTo:"ALL", tag:"W-6", priority:"High" },
+
+  // W-5
+  { id:tid(), name:"Pilot hotel recruiting starts (longlist→shortlist)", lane:"Owner", type:"task", start:"2025-12-22", end:"2025-12-28", appliesTo:"ALL", tag:"W-5", priority:"High" },
+  { id:tid(), name:"Owner value pack (ROI + honors + procurement model)", lane:"PMO", type:"task", start:"2025-12-22", end:"2025-12-28", appliesTo:"ALL", tag:"W-5", priority:"High" },
+
+  // W-4 + G0
+  { id:tid(), name:"Final approval & version freeze (Policy/Budget/Rules)", lane:"PMO", type:"task", start:"2025-12-29", end:"2025-12-31", appliesTo:"ALL", tag:"W-4", priority:"High" },
+  { id:tid(), name:"G0 — Project approved & frozen (v1.0)", lane:"PMO", type:"milestone", start:"2025-12-31", end:"2025-12-31", appliesTo:"ALL", tag:"G0", priority:"High" },
+
+  // W-3 + G1
+  { id:tid(), name:"Confirm 10 pilot hotels + owner budget commitment", lane:"Owner", type:"task", start:"2026-01-05", end:"2026-01-11", appliesTo:"ALL", tag:"W-3", priority:"High" },
+  { id:tid(), name:"Hotel execution teams assigned (GM/HR/Finance/Ops)", lane:"HotelOps", type:"task", start:"2026-01-05", end:"2026-01-11", appliesTo:"ALL", tag:"W-3", priority:"High" },
+  { id:tid(), name:"G1 — 10 pilot hotels locked", lane:"Owner", type:"milestone", start:"2026-01-10", end:"2026-01-10", appliesTo:"ALL", tag:"G1", priority:"High" },
+
+  // W-2 + G2
+  { id:tid(), name:"Toolkit & SOP finalize (ticket/stay/dining/reimb/content)", lane:"PMO", type:"task", start:"2026-01-12", end:"2026-01-18", appliesTo:"ALL", tag:"W-2", priority:"High" },
+  { id:tid(), name:"Procurement order placed (film cameras + gift SKUs)", lane:"HotelOps", type:"task", start:"2026-01-12", end:"2026-01-18", appliesTo:"ALL", tag:"W-2", priority:"Medium" },
+  { id:tid(), name:"Content specs frozen (phone vlog format + film workflow)", lane:"BrandPR", type:"task", start:"2026-01-12", end:"2026-01-18", appliesTo:"ALL", tag:"W-2", priority:"Medium" },
+  { id:tid(), name:"G2 — Toolkit/SOP frozen", lane:"PMO", type:"milestone", start:"2026-01-17", end:"2026-01-17", appliesTo:"ALL", tag:"G2", priority:"High" },
+
+  // W-1
+  { id:tid(), name:"Employee selection opens (survey + nominations + scoring)", lane:"HotelOps", type:"task", start:"2026-01-19", end:"2026-01-25", appliesTo:"ALL", tag:"W-1", priority:"High" },
+
+  // W0 + G3
+  { id:tid(), name:"Roster & travel window lock (incl. backup list)", lane:"HotelOps", type:"task", start:"2026-01-26", end:"2026-02-01", appliesTo:"ALL", tag:"W0", priority:"High" },
+  { id:tid(), name:"Internal settlement outreach to destination Marriott hotels", lane:"HotelOps", type:"task", start:"2026-01-26", end:"2026-02-01", appliesTo:"ALL", tag:"W0", priority:"High" },
+  { id:tid(), name:"G3 — Participant roster frozen", lane:"PMO", type:"milestone", start:"2026-01-31", end:"2026-01-31", appliesTo:"ALL", tag:"G3", priority:"High" },
+
+  // W1 + G4
+  { id:tid(), name:"Ticketing + stay + dining booking lock (confirmation nos.)", lane:"HotelOps", type:"task", start:"2026-02-02", end:"2026-02-08", appliesTo:"ALL", tag:"W1", priority:"High" },
+  { id:tid(), name:"G4 — Stay/Dining locked", lane:"Finance", type:"milestone", start:"2026-02-07", end:"2026-02-07", appliesTo:"ALL", tag:"G4", priority:"High" },
+
+  // W2 + G5 + key dates
+  { id:tid(), name:"Travel pack distributed (confirmations + contacts + contingency)", lane:"HotelOps", type:"task", start:"2026-02-09", end:"2026-02-13", appliesTo:"ALL", tag:"W2", priority:"High" },
+  { id:tid(), name:"Hotel rehearsal + duty roster (CNY hotline)", lane:"HotelOps", type:"task", start:"2026-02-09", end:"2026-02-14", appliesTo:"ALL", tag:"W2", priority:"High" },
+  { id:tid(), name:"G5 — Travel pack completed", lane:"PMO", type:"milestone", start:"2026-02-13", end:"2026-02-13", appliesTo:"ALL", tag:"G5", priority:"High" },
+  { id:tid(), name:"Make-up Working Day (Ops readiness)", lane:"PMO", type:"milestone", start:"2026-02-14", end:"2026-02-14", appliesTo:"ALL", tag:"Key Date", priority:"Low" },
+
+  // Execution + key dates
+  { id:tid(), name:"Execution window (CNY Holiday) — benefit delivery", lane:"HotelOps", type:"task", start:"2026-02-15", end:"2026-02-23", appliesTo:"ALL", tag:"G6", priority:"High" },
+  { id:tid(), name:"CNY Eve (content capture peak)", lane:"BrandPR", type:"milestone", start:"2026-02-16", end:"2026-02-16", appliesTo:"ALL", tag:"Key Date", priority:"Medium" },
+  { id:tid(), name:"CNY Day 1 (family moments)", lane:"BrandPR", type:"milestone", start:"2026-02-17", end:"2026-02-17", appliesTo:"ALL", tag:"Key Date", priority:"Medium" },
+
+  // Settlement + G7
+  { id:tid(), name:"Settlement sprint (City Ledger + reimbursements + archiving)", lane:"Finance", type:"task", start:"2026-02-23", end:"2026-03-02", appliesTo:"ALL", tag:"W4", priority:"High" },
+  { id:tid(), name:"Film processing & digital return (employee + group library)", lane:"BrandPR", type:"task", start:"2026-02-23", end:"2026-03-02", appliesTo:"ALL", tag:"W4", priority:"Medium" },
+  { id:tid(), name:"Make-up Working Day (集中对账/收材料)", lane:"Finance", type:"milestone", start:"2026-02-28", end:"2026-02-28", appliesTo:"ALL", tag:"Key Date", priority:"Low" },
+  { id:tid(), name:"G7 — T+7 settlement closed", lane:"Finance", type:"milestone", start:"2026-03-02", end:"2026-03-02", appliesTo:"ALL", tag:"G7", priority:"High" },
+
+  // Review + G8
+  { id:tid(), name:"Pilot review (metrics + case cards + owner feedback)", lane:"PMO", type:"task", start:"2026-03-02", end:"2026-03-08", appliesTo:"ALL", tag:"W5", priority:"High" },
+  { id:tid(), name:"CEO readout + 2027 scale proposal", lane:"PMO", type:"task", start:"2026-03-09", end:"2026-03-15", appliesTo:"ALL", tag:"W6", priority:"High" },
+  { id:tid(), name:"G8 — Post-pilot report delivered", lane:"PMO", type:"milestone", start:"2026-03-15", end:"2026-03-15", appliesTo:"ALL", tag:"G8", priority:"High" },
+];
+
+// Per-hotel blocks (for Hotel Parallel view). These are the ones that used to “pollute” Program view.
+// With A: Program hides non-ALL tasks by default, so Program stays clean.
+function seedHotelParallelBlocks(){
+  const blocks = [];
+  const perHotel = [
+    { name:"Hotel onboarding & internal alignment", start:"2026-01-05", end:"2026-01-11", tag:"Hotel", pr:"High" },
+    { name:"Employee selection & calibration (in-hotel)", start:"2026-01-19", end:"2026-02-01", tag:"Hotel", pr:"High" },
+    { name:"Bookings lock (ticket/stay/dining)", start:"2026-02-02", end:"2026-02-08", tag:"Hotel", pr:"High" },
+    { name:"Travel pack distribution & rehearsal", start:"2026-02-09", end:"2026-02-14", tag:"Hotel", pr:"High" },
+    { name:"Execution (benefit delivery + content collection)", start:"2026-02-15", end:"2026-02-23", tag:"Hotel", pr:"High" },
+    { name:"Settlement & archiving (T+7)", start:"2026-02-23", end:"2026-03-02", tag:"Hotel", pr:"High" }
+  ];
+  for (const h of hotels){
+    for (const b of perHotel){
+      blocks.push({
+        id:tid(),
+        name:`${b.name}`,
+        lane:"HotelOps",
+        type:"task",
+        start:b.start,
+        end:b.end,
+        appliesTo:h.code,
+        tag:b.tag,
+        priority:b.pr
+      });
+    }
+  }
+  tasks = tasks.concat(blocks);
+}
+seedHotelParallelBlocks();
+
+/* =========================
+   State
+========================= */
+let state = {
+  viewMode: "program",
+  hotelFilter: "ALL",
+  broadcastAll: true,
+  showMilestones: true,
+
+  // A
+  showHotelItemsInProgram: false,
+
+  // B
+  detailLevel: "standard",
+
+  // Day/week
+  granularity: "week", // "week" or "day"
+
+  rangeStart: "2025-12-15",
+  rangeEnd: "2026-03-15",
+  colW: 34
+};
+
+/* =========================
+   DOM refs
+========================= */
+const viewModeEl = document.getElementById("viewMode");
+const hotelFilterEl = document.getElementById("hotelFilter");
+const broadcastAllEl = document.getElementById("broadcastAll");
+const colWidthEl = document.getElementById("colWidth");
+const rangeStartEl = document.getElementById("rangeStart");
+const rangeEndEl = document.getElementById("rangeEnd");
+const showMilestonesEl = document.getElementById("showMilestones");
+const showHotelItemsInProgramEl = document.getElementById("showHotelItemsInProgram");
+const detailLevelEl = document.getElementById("detailLevel");
+const granularityEl = document.getElementById("granularity");
+const colUnitEl = document.getElementById("colUnit");
+
+const metaPillEl = document.getElementById("metaPill");
+const titleRightEl = document.getElementById("titleRight");
+const subtitleRightEl = document.getElementById("subtitleRight");
+const ganttEl = document.getElementById("gantt");
+const taskTableBody = document.querySelector("#taskTable tbody");
+
+/* =========================
+   Filters & Guards
+========================= */
+function isMilestone(t){ return String(t.type||"task").toLowerCase() === "milestone"; }
+
+function programVisibilityGuard(t){
+  if (state.viewMode !== "program") return true;
+  if (state.showHotelItemsInProgram) return true;
+  // Program 默认只看集团级任务（ALL）
+  return String(t.appliesTo || "ALL").toUpperCase().trim() === "ALL";
+}
+
+function detailGuard(t){
+  const tag = String(t.tag||"").toUpperCase().trim();
+  const type = String(t.type||"task").toLowerCase();
+
+  if (state.detailLevel === "detailed") return true;
+
+  if (state.detailLevel === "overview"){
+    // Gates (milestones) + W blocks + G tags
+    if (type === "milestone") return true;
+    if (tag.startsWith("W-") || tag === "W0" || tag === "W1" || tag === "W2" || tag === "W3" || tag === "W4" || tag === "W5" || tag === "W6") return true;
+    if (tag.startsWith("G")) return true;
+    return false;
+  }
+
+  // standard
+  if (type === "milestone") return true;
+  if (tag.startsWith("W") || tag.startsWith("G") || tag === "KEY DATE") return true;
+  return false;
+}
+
+function taskAppliesToLane(task, laneKey){
+  const applies = String(task.appliesTo || "ALL").toUpperCase().trim();
+  if (state.viewMode === "program"){
+    return task.lane === laneKey;
+  } else {
+    if (applies === "ALL") return state.broadcastAll;
+    const set = applies.split(",").map(s => s.trim()).filter(Boolean);
+    return set.includes(laneKey);
+  }
+}
+
+function filterTaskByHotelFilter(task){
+  if (state.viewMode === "program") return true;
+  if (state.hotelFilter === "ALL") return true;
+  const applies = String(task.appliesTo || "ALL").toUpperCase().trim();
+  if (applies === "ALL") return state.broadcastAll;
+  return applies.split(",").map(s=>s.trim()).includes(state.hotelFilter);
+}
+
+/* =========================
+   Lanes (base lanes)
+========================= */
+function getBaseLanes(){
+  if (state.viewMode === "program"){
+    return WORKSTREAMS.map(w => ({ key:w.key, label:w.label, hint:w.hint }));
+  } else {
+    const list = (state.hotelFilter === "ALL")
+      ? hotels
+      : hotels.filter(h => h.code === state.hotelFilter);
+    return list.map(h => ({ key:h.code, label:h.code, hint:h.name }));
+  }
+}
+
+/* =========================
+   Time columns (week/day)
+========================= */
+function buildColumns(){
+  const rs0 = parseDate(state.rangeStart);
+  const re0 = parseDate(state.rangeEnd);
+
+  if (state.granularity === "week"){
+    const rs = startOfWeekMon(rs0);
+    const re = startOfWeekMon(re0);
+    const cols = [];
+    let cur = new Date(rs.getTime());
+    while (cur <= re){
+      cols.push(new Date(cur.getTime()));
+      cur = addDays(cur, 7);
+    }
+    return { cols, base: rs, unitDays: 7 };
+  }
+
+  // day
+  const rs = rs0;
+  const re = re0;
+  const cols = [];
+  let cur = new Date(rs.getTime());
+  while (cur <= re){
+    cols.push(new Date(cur.getTime()));
+    cur = addDays(cur, 1);
+  }
+  return { cols, base: rs, unitDays: 1 };
+}
+
+function indexOfCol(base, d){
+  if (state.granularity === "week"){
+    const ws = startOfWeekMon(d);
+    const days = diffDays(base, ws);
+    return Math.floor(days/7);
+  }
+  return diffDays(base, d);
+}
+
+function spanIndices(base, start, end){
+  const s = indexOfCol(base, start);
+  const e = indexOfCol(base, end);
+  const w = Math.max(1, (e - s + 1));
+  return { s, e, w };
+}
+
+/* =========================
+   C: Auto stacking per lane
+========================= */
+function assignStackLevels(bars, base){
+  // bars = [{t, s, e}] using col indices inclusive
+  const sorted = bars.slice().sort((a,b) => (a.s - b.s) || ((a.e-a.s) - (b.e-b.s)));
+  const levelsEnd = []; // inclusive end index for each level
+  const levelById = new Map();
+
+  for (const b of sorted){
+    let placed = false;
+    for (let lvl=0; lvl<levelsEnd.length; lvl++){
+      if (b.s > levelsEnd[lvl]){ // no overlap (strictly after)
+        levelsEnd[lvl] = b.e;
+        levelById.set(b.t.id, lvl);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed){
+      levelsEnd.push(b.e);
+      levelById.set(b.t.id, levelsEnd.length-1);
+    }
+  }
+  const levelsCount = Math.max(1, levelsEnd.length);
+  return { levelById, levelsCount };
+}
+
+function buildLaneRows(baseLanes, visibleTasks, base){
+  // returns row model: rows[], and mapping for (laneKey + taskId)->level
+  const rows = [];
+  const taskLevel = new Map(); // key: laneKey|taskId -> level
+  const rowIndexOf = new Map(); // key: laneKey|level -> global row index
+
+  for (const lane of baseLanes){
+    const laneTasks = visibleTasks
+      .filter(t => (state.showMilestones ? true : !isMilestone(t)))
+      .filter(t => (state.viewMode === "program"
+          ? (t.lane === lane.key)
+          : taskAppliesToLane(t, lane.key)))
+      .filter(t => (state.viewMode === "program" ? true : filterTaskByHotelFilter(t)));
+
+    // separate bars vs milestones (milestones will render only on level 0 row)
+    const barTasks = laneTasks.filter(t => !isMilestone(t));
+    const barSpans = barTasks.map(t => {
+      const s = parseDate(t.start), e = parseDate(t.end);
+      const sp = spanIndices(base, s, e);
+      return { t, s:sp.s, e:sp.e };
+    });
+
+    const { levelById, levelsCount } = assignStackLevels(barSpans, base);
+
+    for (let lvl=0; lvl<levelsCount; lvl++){
+      const idx = rows.length;
+      rows.push({
+        laneKey: lane.key,
+        level: lvl,
+        label: (lvl===0 ? lane.label : ""),
+        hint: (lvl===0 ? lane.hint : ""),
+        isFirst: (lvl===0)
+      });
+      rowIndexOf.set(`${lane.key}|${lvl}`, idx);
+    }
+
+    for (const t of barTasks){
+      const lvl = levelById.get(t.id) ?? 0;
+      taskLevel.set(`${lane.key}|${t.id}`, lvl);
+    }
+  }
+  return { rows, taskLevel, rowIndexOf };
+}
+
+/* =========================
+   Rendering
+========================= */
+function render(){
+  document.documentElement.style.setProperty("--colW", `${state.colW}px`);
+  colUnitEl.textContent = (state.granularity === "day") ? "days" : "weeks";
+
+  const baseLanes = getBaseLanes();
+  const { cols, base } = buildColumns();
+
+  // Decide what tasks are visible at all (A+B+milestones toggle etc.)
+  let visibleTasks = tasks
+    .filter(programVisibilityGuard)
+    .filter(detailGuard)
+    .filter(t => (state.showMilestones ? true : !isMilestone(t)));
+
+  if (state.viewMode === "hotel"){
+    visibleTasks = visibleTasks.filter(filterTaskByHotelFilter);
+  }
+
+  const { rows, taskLevel, rowIndexOf } = buildLaneRows(baseLanes, visibleTasks, base);
+
+  // Meta
+  metaPillEl.textContent = `${state.viewMode === "program" ? "Program View" : "Hotel Parallel"} · ${rows.length} rows · ${visibleTasks.length} items · ${cols.length} ${state.granularity === "day" ? "days" : "weeks"}`;
+
+  titleRightEl.textContent = state.viewMode === "program"
+    ? "Program Gantt (by Workstream)"
+    : `Hotel Parallel Gantt ${state.hotelFilter === "ALL" ? "(All pilots)" : `(${state.hotelFilter})`}`;
+
+  subtitleRightEl.textContent = `${state.granularity === "day" ? "Daily" : "Weekly"} columns (${state.granularity === "week" ? "Mon-based" : "calendar days"}). Today line: ${TODAY_STR}`;
+
+  // Header cells
+  const headerLeftTitle = (state.viewMode === "program") ? "Workstreams" : "Hotels";
+  const headerLeftSub = (state.viewMode === "program") ? "Cross-function control (auto-stacked)" : "Parallel execution lanes (auto-stacked)";
+
+  const headerCells = cols.map((c, i) => {
+    if (state.granularity === "week"){
+      const m = c.toLocaleString("en-US",{month:"short"});
+      const d = c.getDate();
+      return `<div class="wkCell" title="${toDateStr(c)}">
+        <div>W${i+1}</div>
+        <div class="m">${m} ${d}</div>
+      </div>`;
+    }
+    // day
+    const m = c.toLocaleString("en-US",{month:"short"});
+    const d = c.getDate();
+    const wd = c.toLocaleString("en-US",{weekday:"short"}); // Mon..
+    return `<div class="wkCell" title="${toDateStr(c)}">
+      <div>${d}</div>
+      <div class="m">${m} · ${wd}</div>
+    </div>`;
+  }).join("");
+
+  const headerHTML = `
+    <div class="header">
+      <div class="leftHead">
+        <div class="t1">${esc(headerLeftTitle)}</div>
+        <div class="t2">${esc(headerLeftSub)}</div>
+      </div>
+      <div class="timeGrid">${headerCells}</div>
+    </div>
+  `;
+
+  // Labels (stacked sub-rows)
+  const labelsHTML = `
+    <div class="labels">
+      ${rows.map(r => `
+        <div class="laneLabel">
+          ${r.isFirst ? `<b>${esc(r.label)}</b><span>${esc(r.hint)}</span>` : `<span class="subrow">↳ overlap stack</span>`}
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  // Grid rows
+  const gridRowsHTML = `
+    <div class="grid" style="min-width:${cols.length * state.colW}px;">
+      ${rows.map(() => `
+        <div class="gridRow">
+          ${cols.map(() => `<div></div>`).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  ganttEl.innerHTML = headerHTML + `<div class="body">${labelsHTML}${gridRowsHTML}</div>`;
+
+  // Overlay bars/milestones
+  const grid = ganttEl.querySelector(".grid");
+  const rowH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rowH"));
+  const lanePad = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--lanePad"));
+
+  // Today line
+  const today = parseDate(TODAY_STR);
+  const todayIdx = indexOfCol(base, (state.granularity === "week" ? startOfWeekMon(today) : today));
+  if (todayIdx >= 0 && todayIdx <= cols.length){
+    const line = document.createElement("div");
+    line.className = "todayLine";
+    line.style.left = `${todayIdx * state.colW}px`;
+    grid.appendChild(line);
+  }
+
+  // Draw tasks: iterate through visible tasks, compute lane/row index, then render.
+  for (const t of visibleTasks){
+    const s = parseDate(t.start);
+    const e = parseDate(t.end);
+
+    // Soft clip outside range
+    const minRange = parseDate(state.rangeStart);
+    const maxRange = parseDate(state.rangeEnd);
+    if (e < minRange || s > maxRange) continue;
+
+    // Determine which base lane it belongs to (workstream or hotel)
+    if (state.viewMode === "program"){
+      // lane is workstream
+      const laneKey = t.lane;
+      if (!baseLanes.find(x => x.key === laneKey)) continue;
+
+      if (isMilestone(t)){
+        const lvlRow = rowIndexOf.get(`${laneKey}|0`);
+        if (lvlRow == null) continue;
+        drawMilestone(grid, t, base, lvlRow, rowH);
+      } else {
+        const lvl = taskLevel.get(`${laneKey}|${t.id}`) ?? 0;
+        const lvlRow = rowIndexOf.get(`${laneKey}|${lvl}`);
+        if (lvlRow == null) continue;
+        drawBar(grid, t, base, lvlRow, rowH, lanePad);
+      }
+    } else {
+      // lane is hotel code (task appliesTo), milestones/bars drawn for each applicable hotel lane
+      const lanesToDraw = [];
+      const applies = String(t.appliesTo || "ALL").toUpperCase().trim();
+      if (applies === "ALL"){
+        if (state.broadcastAll){
+          for (const lane of baseLanes) lanesToDraw.push(lane.key);
+        }
+      } else {
+        const set = applies.split(",").map(x=>x.trim()).filter(Boolean);
+        for (const code of set){
+          if (baseLanes.find(x=>x.key===code)) lanesToDraw.push(code);
+        }
+      }
+
+      for (const hotelCode of lanesToDraw){
+        if (isMilestone(t)){
+          const lvlRow = rowIndexOf.get(`${hotelCode}|0`);
+          if (lvlRow == null) continue;
+          drawMilestone(grid, t, base, lvlRow, rowH);
+        } else {
+          const lvl = taskLevel.get(`${hotelCode}|${t.id}`) ?? 0;
+          const lvlRow = rowIndexOf.get(`${hotelCode}|${lvl}`);
+          if (lvlRow == null) continue;
+          drawBar(grid, t, base, lvlRow, rowH, lanePad);
+        }
+      }
+    }
+  }
+
+  renderTaskTable();
+}
+
+function drawMilestone(grid, t, base, rowIdx, rowH){
+  const s = parseDate(t.start);
+  const sp = spanIndices(base, s, s);
+  const left = sp.s * state.colW;
+
+  const ms = document.createElement("div");
+  ms.className = "milestone";
+  ms.dataset.label = (t.tag ? t.tag : "MS");
+  ms.title = `${t.name}\n${t.start}`;
+  ms.style.left = `${left + Math.round(state.colW/2) - 7}px`;
+  ms.style.top = `${rowIdx*rowH + Math.round((rowH-14)/2)}px`;
+  grid.appendChild(ms);
+}
+
+function drawBar(grid, t, base, rowIdx, rowH, lanePad){
+  const s = parseDate(t.start);
+  const e = parseDate(t.end);
+  const sp = spanIndices(base, s, e);
+  const left = sp.s * state.colW;
+  const width = sp.w * state.colW;
+
+  const bar = document.createElement("div");
+  bar.className = "bar";
+
+  // priority styling
+  const pr = String(t.priority||"").toLowerCase();
+  if (pr === "high") bar.classList.add("warn");
+  if (pr === "critical") bar.classList.add("bad");
+  if (pr === "low") bar.classList.add("light");
+
+  // In hotel view, ALL tasks look lighter (broadcasted)
+  if (state.viewMode === "hotel" && String(t.appliesTo||"ALL").toUpperCase().trim() === "ALL"){
+    bar.classList.add("light");
+  }
+
+  bar.title = `${t.name}\nLane: ${t.lane}\nApplies: ${t.appliesTo}\n${t.start} → ${t.end}`;
+
+  bar.style.left = `${left + 2}px`;
+  bar.style.top = `${rowIdx*rowH + lanePad}px`;
+  bar.style.width = `${Math.max(14, width - 6)}px`;
+
+  const tag = t.tag ? `<span class="tag">${esc(t.tag)}</span>` : "";
+  bar.innerHTML = `${tag}<span>${esc(t.name)}</span>`;
+  grid.appendChild(bar);
+}
+
+/* =========================
+   Editor table
+========================= */
+function laneOptionsHTML(selected){
+  return WORKSTREAMS.map(w => `<option value="${w.key}" ${w.key===selected?"selected":""}>${esc(w.key)} — ${esc(w.label)}</option>`).join("");
+}
+function typeOptionsHTML(selected){
+  const opts = ["task","milestone"];
+  return opts.map(x => `<option value="${x}" ${x===selected?"selected":""}>${x}</option>`).join("");
+}
+function priorityOptionsHTML(selected){
+  const opts = ["Low","Medium","High","Critical"];
+  return opts.map(x => `<option value="${x}" ${String(selected||"")===x?"selected":""}>${x}</option>`).join("");
+}
+
+function renderTaskTable(){
+  const rows = tasks.slice().sort((a,b) => (a.start.localeCompare(b.start)));
+  taskTableBody.innerHTML = rows.map(t => `
+    <tr data-id="${t.id}">
+      <td><input type="text" value="${esc(t.name)}" data-field="name"/></td>
+      <td><select data-field="lane">${laneOptionsHTML(t.lane)}</select></td>
+      <td><select data-field="type">${typeOptionsHTML(t.type)}</select></td>
+      <td><input type="date" value="${esc(t.start)}" data-field="start"/></td>
+      <td><input type="date" value="${esc(t.end)}" data-field="end"/></td>
+      <td>
+        <input type="text" value="${esc(t.appliesTo||"ALL")}" data-field="appliesTo"/>
+        <div class="tiny">Use <b>ALL</b> or comma list: H01,H02</div>
+      </td>
+      <td><input type="text" value="${esc(t.tag||"")}" data-field="tag"/></td>
+      <td><select data-field="priority">${priorityOptionsHTML(t.priority||"Medium")}</select></td>
+      <td>
+        <button type="button" data-act="dup">Duplicate</button>
+        <button type="button" data-act="del" class="dangerBtn">Delete</button>
+      </td>
+    </tr>
+  `).join("");
+
+  taskTableBody.querySelectorAll("tr").forEach(tr => {
+    const id = tr.getAttribute("data-id");
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+
+    tr.querySelectorAll("[data-field]").forEach(inp => {
+      const field = inp.getAttribute("data-field");
+      const handler = () => {
+        t[field] = inp.value;
+        if (field === "type" && inp.value === "milestone"){ t.end = t.start; }
+        if (field === "start" && parseDate(t.end) < parseDate(t.start)) t.end = t.start;
+        if (field === "end" && parseDate(t.end) < parseDate(t.start)) t.end = t.start;
+        render();
+      };
+      inp.addEventListener("input", handler);
+      inp.addEventListener("change", handler);
+    });
+
+    tr.querySelectorAll("button[data-act]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const act = btn.getAttribute("data-act");
+        if (act === "del"){
+          tasks = tasks.filter(x => x.id !== id);
+        } else if (act === "dup"){
+          const copy = JSON.parse(JSON.stringify(t));
+          copy.id = tid();
+          copy.name = copy.name + " (copy)";
+          tasks.push(copy);
+        }
+        render();
+      });
+    });
+  });
+}
+
+/* =========================
+   Exports
+========================= */
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function exportCSV(){
+  const headers = ["id","name","lane","type","start","end","appliesTo","tag","priority"];
+  const lines = [headers.join(",")];
+  tasks.forEach(t => {
+    const row = headers.map(h => `"${String(t[h] ?? "").replace(/"/g,'""')}"`).join(",");
+    lines.push(row);
+  });
+  downloadBlob(lines.join("\n"), "WanStyle_Gantt.csv", "text/csv;charset=utf-8");
+}
+function exportJSON(){
+  const payload = { hotels, tasks, state };
+  downloadBlob(JSON.stringify(payload, null, 2), "WanStyle_Gantt.json", "application/json;charset=utf-8");
+}
+
+/* =========================
+   Auto range
+========================= */
+function autoFitRange(){
+  let minD = null, maxD = null;
+  for (const t of tasks){
+    const s = parseDate(t.start);
+    const e = parseDate(t.end);
+    if (!minD || s < minD) minD = s;
+    if (!maxD || e > maxD) maxD = e;
+  }
+  // pad
+  minD = addDays(minD, -7);
+  maxD = addDays(maxD, +7);
+  state.rangeStart = toDateStr(minD);
+  state.rangeEnd = toDateStr(maxD);
+  rangeStartEl.value = state.rangeStart;
+  rangeEndEl.value = state.rangeEnd;
+}
+
+/* =========================
+   Controls wiring
+========================= */
+function buildHotelFilter(){
+  const opts = [{code:"ALL", name:"All Hotels"}].concat(hotels);
+  hotelFilterEl.innerHTML = opts.map(o => `<option value="${o.code}">${esc(o.code)} — ${esc(o.name)}</option>`).join("");
+}
+function syncControls(){
+  viewModeEl.value = state.viewMode;
+  hotelFilterEl.value = state.hotelFilter;
+  broadcastAllEl.checked = state.broadcastAll;
+  showMilestonesEl.checked = state.showMilestones;
+
+  showHotelItemsInProgramEl.checked = state.showHotelItemsInProgram;
+  detailLevelEl.value = state.detailLevel;
+  granularityEl.value = state.granularity;
+
+  colWidthEl.value = state.colW;
+  rangeStartEl.value = state.rangeStart;
+  rangeEndEl.value = state.rangeEnd;
+
+  colUnitEl.textContent = (state.granularity === "day") ? "days" : "weeks";
+}
+
+viewModeEl.addEventListener("change", () => { state.viewMode = viewModeEl.value; render(); });
+hotelFilterEl.addEventListener("change", () => { state.hotelFilter = hotelFilterEl.value; render(); });
+broadcastAllEl.addEventListener("change", () => { state.broadcastAll = broadcastAllEl.checked; render(); });
+showMilestonesEl.addEventListener("change", () => { state.showMilestones = showMilestonesEl.checked; render(); });
+
+showHotelItemsInProgramEl.addEventListener("change", () => { state.showHotelItemsInProgram = showHotelItemsInProgramEl.checked; render(); });
+detailLevelEl.addEventListener("change", () => { state.detailLevel = detailLevelEl.value; render(); });
+
+granularityEl.addEventListener("change", () => {
+  state.granularity = granularityEl.value;
+
+  // sensible defaults when switching
+  if (state.granularity === "day"){
+    // more columns → narrower default
+    state.colW = clamp(state.colW, 12, 30);
+    colWidthEl.value = state.colW;
+  } else {
+    state.colW = clamp(state.colW, 24, 64);
+    colWidthEl.value = state.colW;
+  }
+  render();
+});
+
+colWidthEl.addEventListener("input", () => {
+  const lo = (state.granularity === "day") ? 12 : 24;
+  const hi = (state.granularity === "day") ? 80 : 80;
+  state.colW = clamp(Number(colWidthEl.value||34), lo, hi);
+  render();
+});
+rangeStartEl.addEventListener("change", () => { state.rangeStart = rangeStartEl.value; render(); });
+rangeEndEl.addEventListener("change", () => { state.rangeEnd = rangeEndEl.value; render(); });
+
+document.getElementById("btnAutoRange").addEventListener("click", () => { autoFitRange(); render(); });
+document.getElementById("btnAddTask").addEventListener("click", () => {
+  tasks.push({
+    id:tid(),
+    name:"New task",
+    lane:"PMO",
+    type:"task",
+    start: state.rangeStart,
+    end: state.rangeStart,
+    appliesTo: "ALL",
+    tag:"",
+    priority:"Medium"
+  });
+  render();
+});
+document.getElementById("btnExportCSV").addEventListener("click", exportCSV);
+document.getElementById("btnExportJSON").addEventListener("click", exportJSON);
+document.getElementById("btnReset").addEventListener("click", () => location.reload());
+
+/* =========================
+   Init
+========================= */
+buildHotelFilter();
+syncControls();
+render();
+</script>
+</body>
+</html>
